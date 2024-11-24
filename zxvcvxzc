@@ -1,0 +1,84 @@
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+local holdingKey = false
+
+local function getNearestSeatToMouse()
+    local nearestSeat = nil
+    local shortestDistance = math.huge
+    for _, descendant in pairs(workspace.Vehicles:GetDescendants()) do
+        if descendant:IsA("VehicleSeat") and descendant.Name == "DriverSeat" then
+            local screenPosition, onScreen = workspace.CurrentCamera:WorldToViewportPoint(descendant.Position)
+            if onScreen then
+                local mousePosition = Vector2.new(Mouse.X, Mouse.Y)
+                local seatScreenPosition = Vector2.new(screenPosition.X, screenPosition.Y)
+                local distance = (mousePosition - seatScreenPosition).Magnitude
+                if distance < shortestDistance then
+                    shortestDistance = distance
+                    nearestSeat = descendant
+                end
+            end
+        end
+    end
+    return nearestSeat
+end
+
+local function stealCar(seat)
+    if not seat or not seat:IsA("VehicleSeat") then return end
+    getfenv().rat = nil
+    local distance = math.huge
+    local playerPosition = LocalPlayer.Character.HumanoidRootPart.Position
+    local seatDistance = (seat.Position - playerPosition).Magnitude
+    if seatDistance < distance then
+        distance = seatDistance
+        getfenv().rat = seat
+    end
+    task.wait(0.1)
+    getfenv().rat:Sit(LocalPlayer.Character.Humanoid)
+    repeat task.wait() until LocalPlayer.Character.Humanoid.SeatPart == seat
+    ReplicatedStorage.ClientBinds.IsDrivingVehicle:Fire(getfenv().rat.Parent)
+    task.wait(0.2)
+    LocalPlayer.Character.Humanoid.Sit = false
+    repeat task.wait() until LocalPlayer.Character.Humanoid.SeatPart == nil
+    repeat
+        task.wait()
+        getfenv().rat:Sit(LocalPlayer.Character.Humanoid)
+    until LocalPlayer.Character.Humanoid.SeatPart ~= nil and LocalPlayer.Character.Humanoid.Sit == true
+    task.wait(0.2)
+    local vehicle = getfenv().rat.Parent
+    local driveController = vehicle["Drive Controller"]["Vehicle Interface"]:Clone()
+    driveController.Parent = LocalPlayer.PlayerGui.GameGui.VehicleGui
+    ReplicatedStorage.ClientBinds.ManageMobileButtons:Fire("CreateCategory", "Vehicle")
+    ReplicatedStorage.ClientBinds.ManageMobileButtons:Fire("DeleteButton", "ToggleESUI")
+    ReplicatedStorage.ClientBinds.IsDrivingVehicle:Fire(getfenv().rat.Parent)
+    task.wait(0.5)
+    for _, child in pairs(getfenv().rat:GetChildren()) do
+        if child.Name == "Idle Force" then
+            child:Destroy()
+        end
+    end
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == _G.Keybind then
+        holdingKey = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.KeyCode == _G.Keybind then
+        holdingKey = false
+    end
+end)
+
+Mouse.Button1Down:Connect(function()
+    if holdingKey then
+        local nearestSeat = getNearestSeatToMouse()
+        if nearestSeat then
+            stealCar(nearestSeat)
+        end
+    end
+end)
